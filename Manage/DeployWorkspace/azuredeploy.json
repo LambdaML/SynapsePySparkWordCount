@@ -1,0 +1,79 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "name": {
+            "type": "String"
+        },
+        "sqlAdministratorLogin": {
+            "type": "String"
+        },
+        "sqlAdministratorPassword": {
+            "type": "SecureString"
+        },
+        "tagValues": {
+            "defaultValue": {"Created with":"Synapse Azure Resource Manager deploment template"},
+            "type": "Object"
+        },
+        "cmkUri": {
+            "type": "String",
+            "defaultValue": "",
+            "metadata": {
+                "description": "The uri to a key in your Key Vault to add a second layer of encryption on top of the default infrastructure encryption"
+            }
+        }
+    },
+    "variables": {
+        "cmkUriStripVersion": "[if(empty(parameters('cmkUri')), '', substring(parameters('cmkUri'), 0, lastIndexOf(parameters('cmkUri'), '/')))]",
+        "withCmk": {
+            "cmk": {
+                "key": {
+                    "name": "default",
+                    "keyVaultUrl": "[variables('cmkUriStripVersion')]"
+                }
+            }
+        },
+        "encryption": "[if(empty(parameters('cmkUri')), json('{}'), variables('withCmk'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2018-05-01",
+            "name": "storage",
+            "properties": {
+              "mode": "Incremental",
+              "templateLink": {
+                "uri": "[uri(deployment().properties.templateLink.uri, '/Azure-Samples/Synapse/master/Manage/DeployWorkspace/storage/azuredeploy.json')]",
+                "contentVersion": "1.0.0.0"
+              },
+              "parameters":{
+                "storageAccount":{"value": "[replace(parameters('name'),'-','')]"}
+              }
+            }
+        },
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2018-05-01",
+            "name": "workspace",
+            "properties": {
+              "mode": "Incremental",
+              "templateLink": {
+                "uri": "[uri(deployment().properties.templateLink.uri, '/Azure-Samples/Synapse/master/Manage/DeployWorkspace/workspace/azuredeploy.json')]",
+                "contentVersion": "1.0.0.0"
+              },
+              "parameters":{
+                "name":{"value": "[parameters('name')]"},
+                "sqlAdministratorLogin":{"value": "[parameters('sqlAdministratorLogin')]"},
+                "sqlAdministratorPassword":{"value": "[parameters('sqlAdministratorPassword')]"},
+                "defaultDataLakeStorageAccountName":{"value": "[replace(parameters('name'),'-','')]"},
+                "tagValues":{"value": "[parameters('tagValues')]"},
+                "encryption":{"value": "[variables('encryption')]"}
+              }
+            },
+            "dependsOn": [
+                "storage"
+            ]
+        }
+    ],
+    "outputs": {}
+}
